@@ -1,0 +1,46 @@
+name: ara_film
+on:
+  workflow_dispatch:
+    inputs:
+      hikaye:
+        description: "Hikâye dosyası"
+        default: hikayeler/test30.txt
+permissions:
+  contents: write
+jobs:
+  film:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - name: Piper, ffmpeg
+        run: pip install -q piper-tts scipy numpy && sudo apt-get install -y -qq ffmpeg >/dev/null && python -m piper.download_voices tr_TR-dfki-medium
+      - name: Sahne ve seslendirme
+        run: |
+          python uretim/plan.py ${{ inputs.hikaye }} cikti
+          python uretim/film_json.py cikti cikti/film.json
+      - name: Ara 3D Gen (sabit sürüm, MIT)
+        run: |
+          git clone -q https://github.com/olatunde85/3d-gen ara
+          cd ara && git checkout -q 21ac4377a6616b30dc6b905141caeb355ec719cb
+          npm ci --silent
+          npm run setup-assets 2>&1 | tail -5
+          npm i --no-save playwright >/dev/null 2>&1
+      - name: Film çek (headless Chrome)
+        run: |
+          cd ara
+          nohup npx vite --port 4422 --strictPort > ../vite.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:4422/studio/ >/dev/null && break; sleep 2; done
+          cp ../uretim/ara_cek.mjs . 
+          node ara_cek.mjs ../cikti/film.json ../cikti/ara.mp4
+      - name: Ses, altyazı, müzik ekle
+        run: |
+          mkdir segs && cp cikti/ara.mp4 segs/seg_0.mp4
+          ARA=1 python uretim/birlestir.py cikti segs cikti/video.mp4 | tee olcum.txt
+      - name: Yayınla
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: gh release create "ara-${{ github.run_number }}" cikti/video.mp4 -t "Ara film ${{ github.run_number }}" -n "$(cat olcum.txt)"

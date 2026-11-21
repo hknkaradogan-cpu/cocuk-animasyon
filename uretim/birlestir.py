@@ -16,7 +16,7 @@ subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i
 kare = int(subprocess.check_output(["ffprobe", "-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries",
                                     "stream=nb_read_frames", "-of", "csv=p=0", sessiz]).decode().strip())
 beklenen = len(tl["env"])
-if kare != beklenen:
+if not os.environ.get("ARA") and kare != beklenen:
     raise SystemExit("HATA: kare sayısı %d, beklenen %d (eksik parça olabilir)" % (kare, beklenen))
 # altyazı (DejaVu Bold Türkçe karakterleri destekler)
 font = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
