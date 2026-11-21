@@ -27,8 +27,8 @@ for i, (s, e) in enumerate(zip(sc, tl["tl"])):
     vf.append("drawtext=fontfile=%s:textfile=%s:fontsize=64:fontcolor=white:borderw=6:bordercolor=black:x=(w-text_w)/2:y=h*0.80:"
               "enable='between(t,%.2f,%.2f)'" % (font, f, e["t0"] - 0.05, e["t0"] + e["d"] + 0.15))
 muzik = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "varliklar", "muzik1.mp3")
-fc = ("[0:v]%s[v];[1:a]volume=1.5[ses];[2:a]volume=0.2,aloop=loop=-1:size=2e9,atrim=0:%.2f[m];"
-      "[m][ses]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=300[d];[d][ses]amix=inputs=2:normalize=0:duration=first,"
+fc = ("[0:v]%s[v];[1:a]volume=1.5,asplit=2[ses1][ses2];[2:a]volume=0.2,aloop=loop=-1:size=2e9,atrim=0:%.2f[m];"
+      "[m][ses1]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=300[d];[d][ses2]amix=inputs=2:normalize=0:duration=first,"
       "alimiter=limit=0.95[a]") % (",".join(vf), total)
 subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", sessiz, "-i", os.path.join(cikti, "voice.wav"), "-i", muzik, "-filter_complex", fc,
                 "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
