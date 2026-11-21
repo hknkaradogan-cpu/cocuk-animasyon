@@ -55,7 +55,11 @@ jobs:
             ffmpeg -v error -y -framerate 12 -start_number $A -i cikti/fr/%04d.png -c:v libx264 -crf 12 -pix_fmt yuv420p seg_${{ matrix.idx }}.mp4; fi
           ls -la seg_* || true
       - uses: actions/upload-artifact@v4
-        with: {name: seg-${{ matrix.idx }}, path: "seg_*.mp4", if-no-files-found: ignore, compression-level: 0}
+        with:
+          name: seg-${{ matrix.idx }}
+          path: "seg_*.mp4"
+          if-no-files-found: ignore
+          compression-level: 0
   birlestir:
     needs: render
     runs-on: ubuntu-latest
