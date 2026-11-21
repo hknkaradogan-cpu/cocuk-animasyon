@@ -1,0 +1,76 @@
+name: uret
+on:
+  workflow_dispatch:
+    inputs:
+      hikaye:
+        description: "Hikâye dosyası (hikayeler/ altında)"
+        default: hikayeler/test30.txt
+      ornek:
+        description: "Kare başına örnek sayısı (kalite/hız)"
+        default: "8"
+permissions:
+  contents: write
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      kare: ${{ steps.p.outputs.kare }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Piper ve araçlar
+        run: pip install -q piper-tts scipy numpy && sudo apt-get install -y -qq ffmpeg >/dev/null
+      - name: Türkçe ses modeli
+        run: python -m piper.download_voices tr_TR-dfki-medium
+      - id: p
+        name: Sahne ve seslendirme
+        run: |
+          python uretim/plan.py ${{ inputs.hikaye }} cikti | tee plan.log
+          echo "kare=$(python -c "import json;print(len(json.load(open('cikti/tl.json'))['env']))")" >> $GITHUB_OUTPUT
+          ffprobe -v error -show_entries format=duration -of csv=p=0 cikti/voice.wav
+      - uses: actions/upload-artifact@v4
+        with: {name: plan, path: cikti, compression-level: 0}
+  render:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      max-parallel: 12
+      matrix:
+        idx: [0,1,2,3,4,5,6,7,8,9,10,11]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - uses: actions/download-artifact@v4
+        with: {name: plan, path: cikti}
+      - run: pip install -q bpy numpy && sudo apt-get install -y -qq ffmpeg >/dev/null
+      - name: Kareleri çiz
+        run: |
+          T=${{ needs.plan.outputs.kare }}; P=$(( (T + 11) / 12 )); A=$(( ${{ matrix.idx }} * P )); B=$(( A + P )); [ $B -gt $T ] && B=$T
+          echo "kareler $A-$B"
+          if [ $A -lt $B ]; then IS_DIR=$PWD/cikti python uretim/render.py ${{ inputs.ornek }} $A $B
+            ffmpeg -v error -y -framerate 12 -start_number $A -i cikti/fr/%04d.png -c:v libx264 -crf 12 -pix_fmt yuv420p seg_${{ matrix.idx }}.mp4; fi
+          ls -la seg_* || true
+      - uses: actions/upload-artifact@v4
+        with: {name: seg-${{ matrix.idx }}, path: "seg_*.mp4", if-no-files-found: ignore, compression-level: 0}
+  birlestir:
+    needs: render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/download-artifact@v4
+        with: {name: plan, path: cikti}
+      - uses: actions/download-artifact@v4
+        with: {pattern: "seg-*", path: segs, merge-multiple: true}
+      - run: sudo apt-get install -y -qq ffmpeg >/dev/null
+      - name: MP4 oluştur
+        run: python uretim/birlestir.py cikti segs cikti/video.mp4 | tee birlestir.log
+      - name: Yayınla (Release)
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          gh release create "uretim-${{ github.run_number }}" cikti/video.mp4 --title "Üretim #${{ github.run_number }}" --notes "$(cat birlestir.log)"
